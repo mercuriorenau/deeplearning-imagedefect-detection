@@ -1,0 +1,37 @@
+# Image Defect Detection - config
+
+# Paths - choose one:
+# A) MVTec AD: put the whole MVTec folder (bottle, cable, ...) in data/. Set mvtec_root and mvtec_category.
+# B) Custom: train_dir and val_dir, each with defect/ and no_defect/ inside.
+data:
+  root: "data"
+  # MVTec AD (use as-is, no copying): root folder that contains bottle, cable, metal_nut, etc.
+  mvtec_root: "data"            # folder that contains bottle, cable, metal_nut, etc.
+  mvtec_category: "metal_nut"   # one category: bottle, cable, capsule, carpet, grid, hazelnut, leather, metal_nut, pill, screw, tile, toothbrush, transistor, wood, zipper
+  train_ratio: 0.8              # for MVTec: 80% train, 20% val (split in code)
+  train_dir: "data/train"
+  val_dir: "data/val"
+
+# Model - ResNet transfer learning
+model:
+  name: "resnet18"           # resnet18, resnet34, resnet50
+  num_classes: 2             # defect / no_defect
+  pretrained: true
+  freeze_backbone_epochs: 2   # Freeze backbone for first N epochs
+
+# Training
+training:
+  batch_size: 32
+  epochs: 15
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  num_workers: 4
+
+# Image
+image:
+  size: 224                  # ResNet default input size
+
+# Output
+output:
+  checkpoint_dir: "checkpoints"
+  best_model: "checkpoints/best_model.pt"
