@@ -164,6 +164,7 @@ def main():
                 image_size=image_size,
                 num_workers=num_workers,
                 train_ratio=data_cfg.get("train_ratio", 0.8),
+                split_mode=data_cfg.get("split_mode", "pooled_random"),
             )
             save_path = out_dir / f"best_model_{cat}.pt"
             run_training(cfg, train_loader, val_loader, class_to_idx, str(save_path), epochs, device)
@@ -186,6 +187,7 @@ def main():
             image_size=image_size,
             num_workers=num_workers,
             train_ratio=data_cfg.get("train_ratio", 0.8),
+            split_mode=data_cfg.get("split_mode", "pooled_random"),
         )
         save_path_suffix = mvtec_category  # save as best_model_bottle.pt etc.
     else:

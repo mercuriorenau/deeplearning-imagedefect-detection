@@ -16,6 +16,7 @@ def test_imports():
     import src.train  # noqa: F401
     import src.predict  # noqa: F401
     import src.evaluate  # noqa: F401
+    import src.metrics_utils  # noqa: F401
 
 
 def test_config_loads():
@@ -25,6 +26,10 @@ def test_config_loads():
         cfg = yaml.safe_load(f)
     assert cfg["model"]["name"] in ("resnet18", "resnet34", "resnet50")
     assert cfg["model"]["num_classes"] == 2
+    assert cfg["data"].get("split_mode", "pooled_random") in (
+        "pooled_random",
+        "official_holdout",
+    )
 
 
 def test_predict_transform_shape():

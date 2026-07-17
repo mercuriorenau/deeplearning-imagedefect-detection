@@ -9,6 +9,10 @@ data:
   mvtec_root: "data"            # folder that contains bottle, cable, metal_nut, etc.
   mvtec_category: "metal_nut"   # one category: bottle, cable, capsule, carpet, grid, hazelnut, leather, metal_nut, pill, screw, tile, toothbrush, transistor, wood, zipper
   train_ratio: 0.8              # for MVTec: 80% train, 20% val (split in code)
+  # pooled_random (default): pool train+test then random split (matches committed metrics.json)
+  # official_holdout: train on train/good + portion of test defects; eval on held-out test
+  # Switching to official_holdout requires a full retrain before metrics are comparable.
+  split_mode: "pooled_random"
   train_dir: "data/train"
   val_dir: "data/val"
 

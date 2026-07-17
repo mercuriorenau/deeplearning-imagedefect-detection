@@ -115,18 +115,8 @@ def _collect_images(folder):
     return sorted(paths)
 
 
-def get_mvtec_dataloaders(
-    category_dir,
-    batch_size=32,
-    image_size=224,
-    num_workers=4,
-    train_ratio=0.8,
-    seed=42,
-):
-    """
-    Use MVTec AD as-is: category_dir has train/ (good) and test/ (good + defect types).
-    No copying. Train/val split is done in code.
-    """
+def _collect_mvtec_paths(category_dir):
+    """Collect good (train), good (test), and defect (test) paths for an MVTec category."""
     category_dir = Path(category_dir)
     train_dir = category_dir / "train"
     test_dir = category_dir / "test"
@@ -135,35 +125,25 @@ def get_mvtec_dataloaders(
             f"MVTec category folder must contain train/ and test/. Check: {category_dir}"
         )
 
-    # Good = train/*.png, train/good/*.png, and test/good/*.png
-    good_paths = _collect_images(train_dir)
+    good_train = _collect_images(train_dir)
     train_good = train_dir / "good"
     if train_good.exists():
-        good_paths.extend(_collect_images(train_good))
-    good_test = test_dir / "good"
-    if good_test.exists():
-        good_paths.extend(_collect_images(good_test))
+        good_train.extend(_collect_images(train_good))
 
-    # Defect = all test subfolders except "good"
+    good_test = []
+    good_test_dir = test_dir / "good"
+    if good_test_dir.exists():
+        good_test = _collect_images(good_test_dir)
+
     defect_paths = []
     for sub in test_dir.iterdir():
         if sub.is_dir() and sub.name != "good":
             defect_paths.extend(_collect_images(sub))
 
-    if not good_paths or not defect_paths:
-        raise ValueError(
-            f"Need both good and defect images. Found good: {len(good_paths)}, defect: {len(defect_paths)} in {category_dir}"
-        )
+    return good_train, good_test, defect_paths
 
-    class_to_idx = CLASS_TO_IDX
-    samples = [(p, 0) for p in good_paths] + [(p, 1) for p in defect_paths]
-    random.Random(seed).shuffle(samples)
 
-    n = len(samples)
-    split = int(n * train_ratio)
-    train_samples = samples[:split]
-    val_samples = samples[split:]
-
+def _make_loaders(train_samples, val_samples, batch_size, image_size, num_workers):
     train_transforms = get_transforms(image_size, is_training=True)
     val_transforms = get_transforms(image_size, is_training=False)
     train_ds = PathLabelDataset(train_samples, transform=train_transforms)
@@ -182,7 +162,75 @@ def get_mvtec_dataloaders(
         shuffle=False,
         num_workers=num_workers,
     )
-    return train_loader, val_loader, class_to_idx
+    return train_loader, val_loader, CLASS_TO_IDX
+
+
+def get_mvtec_dataloaders(
+    category_dir,
+    batch_size=32,
+    image_size=224,
+    num_workers=4,
+    train_ratio=0.8,
+    seed=42,
+    split_mode="pooled_random",
+):
+    """
+    Use MVTec AD as-is: category_dir has train/ (good) and test/ (good + defect types).
+
+    split_mode:
+      - pooled_random (default): pool train+test images, then random 80/20 train/val.
+      - official_holdout: train on train/good + train_ratio of test defects;
+        evaluate on test/good + held-out test defects. Requires retrain when switching.
+    """
+    good_train, good_test, defect_paths = _collect_mvtec_paths(category_dir)
+
+    if split_mode == "official_holdout":
+        if not good_train or not defect_paths:
+            raise ValueError(
+                f"Need train good and test defect images. Found good_train: {len(good_train)}, "
+                f"defect: {len(defect_paths)} in {category_dir}"
+            )
+        if not good_test:
+            raise ValueError(
+                f"official_holdout requires test/good images. None found in {category_dir}"
+            )
+
+        rng = random.Random(seed)
+        defect_shuffled = list(defect_paths)
+        rng.shuffle(defect_shuffled)
+        split = int(len(defect_shuffled) * train_ratio)
+        defect_train = defect_shuffled[:split]
+        defect_eval = defect_shuffled[split:]
+        if not defect_train or not defect_eval:
+            raise ValueError(
+                f"official_holdout split produced empty train or eval defects "
+                f"(n_defect={len(defect_shuffled)}, train_ratio={train_ratio}) in {category_dir}"
+            )
+
+        train_samples = [(p, 0) for p in good_train] + [(p, 1) for p in defect_train]
+        val_samples = [(p, 0) for p in good_test] + [(p, 1) for p in defect_eval]
+        rng.shuffle(train_samples)
+        return _make_loaders(train_samples, val_samples, batch_size, image_size, num_workers)
+
+    if split_mode != "pooled_random":
+        raise ValueError(
+            f"Unknown split_mode: {split_mode}. Use 'pooled_random' or 'official_holdout'."
+        )
+
+    # pooled_random: good = train + test/good; defect = test defect types
+    good_paths = list(good_train) + list(good_test)
+    if not good_paths or not defect_paths:
+        raise ValueError(
+            f"Need both good and defect images. Found good: {len(good_paths)}, "
+            f"defect: {len(defect_paths)} in {category_dir}"
+        )
+
+    samples = [(p, 0) for p in good_paths] + [(p, 1) for p in defect_paths]
+    random.Random(seed).shuffle(samples)
+    split = int(len(samples) * train_ratio)
+    train_samples = samples[:split]
+    val_samples = samples[split:]
+    return _make_loaders(train_samples, val_samples, batch_size, image_size, num_workers)
 
 
 def check_mvtec_category(category_dir):
