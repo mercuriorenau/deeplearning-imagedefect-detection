@@ -16,6 +16,7 @@ data/*
 
 # Do not push trained checkpoints
 checkpoints/*.pt
+!checkpoints/.gitkeep
 
 # Reference images are tracked; ignore other files in examples/
 examples/*
